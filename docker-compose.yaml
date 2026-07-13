@@ -1,0 +1,107 @@
+
+
+services:
+
+
+  postgres: 
+    image: postgres:17
+    environment:
+            POSTGRES_USER: myuser
+            POSTGRES_PASSWORD: mypassword
+            POSTGRES_DB: analytics_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d analytics_db"]
+      interval: 10s
+      timeout: 15s
+      retries: 5
+      start_period: 30s
+
+
+
+
+  airflow_init:
+    image: apache/airflow:3.3.0
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://myuser:mypassword@postgres:5432/analytics_db
+    command: db migrate
+    volumes: 
+      - ./dags:/opt/airflow/dags
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+
+
+
+
+  airflow_processor:
+    image: apache/airflow:3.3.0
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://myuser:mypassword@postgres:5432/analytics_db
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=mypassword
+      - POSTGRES_DB=analytics_db
+      - AIRFLOW__API_AUTH__JWT_SECRET=msLY5u_RIXXBi8ii9j2i7blZBMpn6qnnsVgxmgysuVs
+
+    command: dag-processor
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./data:/opt/airflow/data
+      - ./logs:/opt/airflow/logs
+    depends_on:
+      airflow_init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+
+  airflow_scheduler:
+    image: apache/airflow:3.3.0
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://myuser:mypassword@postgres:5432/analytics_db
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=mypassword
+      - POSTGRES_DB=analytics_db
+      - AIRFLOW__CORE__EXECUTION_API_SERVER_URL=http://airflow_webserver:8080/execution/
+      - AIRFLOW__API_AUTH__JWT_SECRET=msLY5u_RIXXBi8ii9j2i7blZBMpn6qnnsVgxmgysuVs
+
+    command: scheduler
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./data:/opt/airflow/data
+      - ./logs:/opt/airflow/logs
+    depends_on:
+      airflow_init:
+        condition: service_completed_successfully
+      airflow_processor:
+        condition: service_started
+      airflow_webserver:
+        condition: service_started  
+      postgres:
+        condition: service_healthy
+
+
+
+
+  airflow_webserver:
+    image: apache/airflow:3.3.0
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://myuser:mypassword@postgres:5432/analytics_db
+      - AIRFLOW__CORE__EXECUTION_API_SERVER_URL=http://airflow_webserver:8080/execution/
+      - AIRFLOW__API_AUTH__JWT_SECRET=msLY5u_RIXXBi8ii9j2i7blZBMpn6qnnsVgxmgysuVs
+
+    command: api-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+    depends_on:
+      airflow_init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
