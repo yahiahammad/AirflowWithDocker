@@ -3,7 +3,7 @@
 services:
 
 
-  postgres: 
+  postgres:
     image: postgres:17
     environment:
             POSTGRES_USER: myuser
@@ -11,6 +11,20 @@ services:
             POSTGRES_DB: analytics_db
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U myuser -d analytics_db"]
+      interval: 10s
+      timeout: 15s
+      retries: 5
+      start_period: 30s
+
+
+  postgres_data:
+    image: postgres:17
+    environment:
+            POSTGRES_USER: datauser
+            POSTGRES_PASSWORD: datapassword
+            POSTGRES_DB: transactions_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datauser -d transactions_db"]
       interval: 10s
       timeout: 15s
       retries: 5
@@ -40,9 +54,9 @@ services:
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://myuser:mypassword@postgres:5432/analytics_db
-      - POSTGRES_USER=myuser
-      - POSTGRES_PASSWORD=mypassword
-      - POSTGRES_DB=analytics_db
+      - POSTGRES_USER=datauser
+      - POSTGRES_PASSWORD=datapassword
+      - POSTGRES_DB=transactions_db
       - AIRFLOW__API_AUTH__JWT_SECRET=msLY5u_RIXXBi8ii9j2i7blZBMpn6qnnsVgxmgysuVs
 
     command: dag-processor
@@ -55,6 +69,8 @@ services:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
+      postgres_data:
+        condition: service_healthy
 
 
   airflow_scheduler:
@@ -62,9 +78,9 @@ services:
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://myuser:mypassword@postgres:5432/analytics_db
-      - POSTGRES_USER=myuser
-      - POSTGRES_PASSWORD=mypassword
-      - POSTGRES_DB=analytics_db
+      - POSTGRES_USER=datauser
+      - POSTGRES_PASSWORD=datapassword
+      - POSTGRES_DB=transactions_db
       - AIRFLOW__CORE__EXECUTION_API_SERVER_URL=http://airflow_webserver:8080/execution/
       - AIRFLOW__API_AUTH__JWT_SECRET=msLY5u_RIXXBi8ii9j2i7blZBMpn6qnnsVgxmgysuVs
 
@@ -79,8 +95,10 @@ services:
       airflow_processor:
         condition: service_started
       airflow_webserver:
-        condition: service_started  
+        condition: service_started
       postgres:
+        condition: service_healthy
+      postgres_data:
         condition: service_healthy
 
 

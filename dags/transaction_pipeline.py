@@ -8,7 +8,7 @@ username = os.environ["POSTGRES_USER"]
 password = os.environ["POSTGRES_PASSWORD"]
 database = os.environ["POSTGRES_DB"]
 
-connection_string = f"postgresql+psycopg2://{username}:{password}@postgres:5432/{database}"
+connection_string = f"postgresql+psycopg2://{username}:{password}@postgres_data:5432/{database}"
 
 
 engine = create_engine(connection_string)
@@ -18,6 +18,7 @@ with DAG(
     schedule="@daily",
     start_date=datetime(2023, 1, 1),
     catchup=False,
+    max_active_runs=1,
 ) as dag:
 
     @task
