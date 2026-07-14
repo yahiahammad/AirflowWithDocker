@@ -13,6 +13,18 @@ connection_string = f"postgresql+psycopg2://{username}:{password}@postgres_data:
 
 engine = create_engine(connection_string)
 
+TXN_DATE_FORMATS = ["%m-%d-%Y", "%Y/%m/%d", "%m-%d-%y", "%d-%m-%Y"]
+
+
+def parse_txn_date(raw_dates):
+    parsed = pd.Series(pd.NaT, index=raw_dates.index, dtype="datetime64[ns]")
+    for fmt in TXN_DATE_FORMATS:
+        still_missing = parsed.isna()
+        parsed.loc[still_missing] = pd.to_datetime(
+            raw_dates.loc[still_missing], format=fmt, errors="coerce"
+        )
+    return parsed
+
 with DAG(
     dag_id="transaction_pipeline",
     schedule="@daily",
@@ -30,7 +42,7 @@ with DAG(
     @task
     def clean_data():
         df = pd.read_sql("SELECT * FROM bronze_transactions", con=engine)
-        df['txn_date'] = pd.to_datetime(df['txn_date'], errors='coerce')
+        df['txn_date'] = parse_txn_date(df['txn_date'])
         df.dropna(subset=['txn_date'], inplace=True)
 
         df['amount'] = df['amount'].str.replace('$', '', regex=False)
